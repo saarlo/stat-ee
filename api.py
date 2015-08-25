@@ -29,7 +29,7 @@ class Paths(object):
             r = requests.get(Paths.url_pattern.format(el))        
             for l in r.iter_lines():
                 if l[:7] == 'insDoc(':
-                    path = l.split('/')[1:-1]
+                    path = l[:-3].split('/')[1:]
                     self.paths.append(path)
     
     def __iter__(self):
@@ -41,9 +41,21 @@ class Paths(object):
 # Document tree
 class Element(object):
     'Document tree element. Attributes are added dynamically when DocumentTree is initialised'
-    def __init__(self, is_root=False, is_leaf=False):
+    def __init__(self, is_root=False):
         self._is_root = is_root
-        self._is_leaf = is_leaf
+
+class LeafElement(Element):
+    'Document tree element special case - leaf node'
+    url_pattern = 'http://pub.stat.ee/px-web.2001/Database/{}'
+    
+    def __init__(self, is_root=False, path=False):        
+        self._is_root = is_root
+        self._path = path
+        
+    def get_tables(self):
+        'Download list of data tables under this sub category @todo: finish'
+        return self.url_pattern.format(self._path)
+    
 
 class DocumentTree(object):
     '''Available document hirarchy is under attribute `data`. 
@@ -53,15 +65,21 @@ class DocumentTree(object):
     def __init__(self):
         self.data = Element(True)
         #todo: for testing
-        #self.paths = paths
-        self.paths = Paths()
-        self.paths.load()
+        #self._paths = paths
+        self._paths = Paths()
+        self._paths.load()
+        self._build_tree()
         
-        for path in self.paths:
-            cur_el = self.data
-            for label in path:
-                label = clean_label(label)
-                if not hasattr(cur_el, label):
-                    setattr(cur_el, label, Element())
-                cur_el = getattr(cur_el, label)
+    def _build_tree(self):         
+        for path in self._paths:
+            for path in self._paths:
+                cur_el = self.data
+                # not including last path element in loop, as it is filename (.asp)
+                for i, label in enumerate(path[:-1]):
+                    label = clean_label(label)
+                    if i == len(path) -2: # Leaf element (last of labels)
+                        setattr(cur_el, label, LeafElement(path='/'.join(path)))                        
+                    elif not hasattr(cur_el, label):
+                        setattr(cur_el, label, Element())
+                    cur_el = getattr(cur_el, label)
                 
