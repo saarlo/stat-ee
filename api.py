@@ -46,15 +46,43 @@ class Element(object):
 
 class LeafElement(Element):
     'Document tree element special case - leaf node'
-    url_pattern = 'http://pub.stat.ee/px-web.2001/Database/{}'
+    _url_pattern = 'http://pub.stat.ee/px-web.2001/Database/{}'
     
     def __init__(self, is_root=False, path=False):        
         self._is_root = is_root
         self._path = path
+        self._tables = False
+       
+    @staticmethod
+    def _parse_tables_list(r):
+        '''parse html page with list of pages in it
+        @param r requests `Response` object with function iter_lines()'''    
+        items = []
+        item = {}
+        el_counts = []
+        for line in r.iter_lines():
+            if 'HREF="../../../../Dialog/varval.asp' in line:        
+                if item:
+                    item['element_counts'] = el_counts
+                    el_counts = []        
+                    items.append(item)
+                    item = {}
+
+                item['url'] = line.split('HREF="')[1].split('">')[0]
+                item['name'] = line.split('">')[1].split('</A>')[0]
+            elif item: #we already have 1st line data in item, next ones are element counts:
+                if 'Uuendatud' in line:
+                    item['updated'] = re.search("\d\d\.\d\d\.\d\d\d\d", line).group(0)
+                elif '<I>(' in line and ')</I>' in line:
+                    el_counts.append( int( line.split('<I>(')[1].split(')</I>')[0] ) )        
+        return items
         
     def get_tables(self):
         'Download list of data tables under this sub category @todo: finish'
-        return self.url_pattern.format(self._path)
+        if not self._tables:
+            self._tables = LeafElement._parse_tables_list( requests.get( self._url_pattern.format(self._path) ) )
+        return self._tables
+        
     
 
 class DocumentTree(object):
